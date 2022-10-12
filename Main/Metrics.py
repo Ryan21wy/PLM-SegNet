@@ -1,10 +1,7 @@
 """
 refer to https://github.com/jfzhang95/pytorch-deeplab-xception/blob/master/utils/metrics.py
 """
-import os
 import numpy as np
-import PIL.Image as Image
-
 
 __all__ = ['SegmentationMetric']
 
@@ -102,47 +99,3 @@ class SegmentationMetric(object):
 
     def reset(self):
         self.confusionMatrix = np.zeros((self.numClass, self.numClass))
-
-
-if __name__ == '__main__':
-    a = np.array([[0, 1, 2], [1, 2, 1], [1, 1, 0]])
-    b = np.array([[0, 1, 1], [1, 0, 1], [1, 2, 0]])
-    metric = SegmentationMetric(3)
-    metric.addBatch(b, a)
-    c_precision = metric.classPixelAccuracy()
-    c_recall = metric.classRecall()
-    c_F1_score = metric.class_F1_score()
-    m_precision = metric.meanPixelAccuracy()
-    m_recall = metric.meanRecall()
-    F1_score = metric.F1_score()
-    miou = metric.meanIntersectionOverUnion()[0]
-    c_iou = metric.meanIntersectionOverUnion()[1]
-    print('class precision is: ', 'class recall is: ', 'class F1 is: ', 'class iou is: ')
-    print(c_precision[0], c_precision[1], c_precision[2],
-          c_recall[0], c_recall[1], c_recall[2],
-          c_F1_score[0], c_F1_score[1], c_F1_score[2],
-          c_iou[0], c_iou[1], c_iou[2])
-    print('precision is : %f' % m_precision)
-    print('recall is : %f' % m_recall)
-    print('F1_score is : %f' % F1_score)
-    print('miou is : %f' % miou)
-
-'''
-    L_dir = os.listdir(L_path)
-    for i in range(len(p_dir)):
-        imgPredict = np.array(Image.open(os.path.join(p_path, p_dir[i])))
-        print(imgPredict.shape)
-        imgLabel = np.array(Image.open(os.path.join(p_path, L_dir[i * 2 + 1])))
-        print(imgLabel.shape)
-        metric = SegmentationMetric(5)
-        metric.addBatch(imgPredict, imgLabel)
-        pa = metric.pixelAccuracy()
-        cpa = metric.classPixelAccuracy()
-        mpa = metric.meanPixelAccuracy()
-        mIoU = metric.meanIntersectionOverUnion()
-        print('pa is : %f' % pa)
-        print('cpa is :')
-        print(cpa)
-        print('mpa is : %f' % mpa)
-        print('mIoU is : %f' % mIoU)
-'''

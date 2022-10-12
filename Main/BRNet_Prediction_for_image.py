@@ -10,10 +10,10 @@ import numpy as np
 import os
 import cv2
 
-from BRNet_Architecture import UNet, UNet1, UNet_4l
+from Architecture.BRNet_Architecture import UNet, UNet1, UNet_4l
 
 import PIL.Image as Image
-import matplotlib.pyplot as plt
+
 
 def byj_position_detection(src):
     '''
@@ -76,11 +76,11 @@ def byj_position_detection(src):
     max_contour = contour_info[0][0]
     
     # Get the maximun coordinate of the contour
-    max_contour_coordinate = max_contour[:,0,:]
-    col_max = np.max(max_contour_coordinate[:,0]) + 100
-    col_min = np.min(max_contour_coordinate[:,0]) - 100
-    row_max = np.max(max_contour_coordinate[:,1]) + 100
-    row_min = np.min(max_contour_coordinate[:,1]) - 100
+    max_contour_coordinate = max_contour[:, 0, :]
+    col_max = np.max(max_contour_coordinate[:, 0]) + 100
+    col_min = np.min(max_contour_coordinate[:, 0]) - 100
+    row_max = np.max(max_contour_coordinate[:, 1]) + 100
+    row_min = np.min(max_contour_coordinate[:, 1]) - 100
     
     # Threhold Setting to avoid being out of range
     if col_max > length:
@@ -96,7 +96,6 @@ def byj_position_detection(src):
 
 
 print("Model Performance Testing...")
-#print("Current index of model is {}".format(ind))
 print("Model loading...")
 device = torch.device("cuda:0")
 model = UNet(3, 2).to(device)
@@ -120,9 +119,9 @@ for ind, dir_ in enumerate(dirs):
     [row_min, row_max, col_min, col_max] = byj_position_detection(data_x1)
     
     print("Image preprocessing...")
-    data_x = np.transpose(data_x1,(2,0,1))
+    data_x = np.transpose(data_x1, (2, 0, 1))
     if data_x.shape[1] > data_x.shape[2]:
-        data_x = np.transpose(data_x,(0,2,1))
+        data_x = np.transpose(data_x, (0, 2, 1))
         
     length = data_x.shape[2]
     width = data_x.shape[1]
@@ -133,7 +132,7 @@ for ind, dir_ in enumerate(dirs):
     row_length = row_max - row_min
     col_length = col_max - col_min
     
-    # if supplying it to the beishu of 512/400
+    # height/width is multiples of 512/400
     row_factor = row_length // 512 + 1
     col_factor = col_length // 400 + 1
     row = row_factor * 512
@@ -160,8 +159,7 @@ for ind, dir_ in enumerate(dirs):
     
     data_x = data_x.astype(np.float32)
     
-    data_xs = data_x[:, nrow_min:nrow_max, ncol_min:ncol_max]
-    # print(data_xs.shape)
+    data_xs = data_x[:, nrow_min: nrow_max, ncol_min: ncol_max]
     blank = np.zeros((data_xs.shape[1],data_xs.shape[2]))
     
     bar = 0
@@ -169,7 +167,7 @@ for ind, dir_ in enumerate(dirs):
     for i in range(row_factor):
         for ii in range(col_factor):
             bar += 1
-            test_x = data_xs[:,(512*i):(512*(i+1)),(400*ii):(400*(ii+1))]
+            test_x = data_xs[:, (512 * i): (512 * (i + 1)), (400 * ii): (400 * (ii + 1))]
             with torch.no_grad():
                 test_x = test_x.reshape((1, 3, 512, 400))
                 test_x = test_x / test_x.max()
@@ -178,15 +176,13 @@ for ind, dir_ in enumerate(dirs):
                 pred_y = model(test_x) 
                 
                 py = pred_y.cpu().numpy()
-                py = py.reshape(2,512,400)        
+                py = py.reshape(2, 512, 400)
                 a = np.argmax(py, axis=0)
-                ass.append(a)
-                blank[(512*i):(512*(i+1)),(400*ii):(400*(ii+1))] = a
+                blank[(512 * i): (512 * (i + 1)), (400 * ii): (400 * (ii + 1))] = a
 
                 per = bar / total 
                 print("\rCurrent prediction progress： %.f%s" % (per*100, '%'), flush=True, end='')
-                
-    print()
+
     blank = blank.astype(np.uint8)
     contours, _ = cv2.findContours(blank, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
     for contour in contours:
@@ -214,34 +210,22 @@ for ind, dir_ in enumerate(dirs):
                 blank[rmin:rmax,cmin:cmax] = 1
             else:
                 blank[rmin:rmax,cmin:cmax] = 0
-                
-    # import cv2
-    # ori = np.transpose(data_xs,(1,2,0))
-    # result = cv2.bitwise_and(ori, ori, blank)
-    # result[blank == 0] = 255  # white background
-    # result = result.astype('uint8')
-    # result = cv2.cvtColor(result, cv2.COLOR_RGB2BGR)
-    # os.chdir("D:\\beijingkouchu\\BG9BR_1")
-    # cv2.imwrite("{}_bg9_5l_nomax_trans.png".format(ind),result)
-    # print("ok!")
-
     t2 = time.time()
     print("Background removal is done!")
-    print("Total time cost: %.4f s"%(t2-t1))
-    
-    
+    print("Total time cost: %.4f s"% (t2 - t1))
+
     print("Image saving...")
     new_ori = np.array(Image.open(filepath + "\\" + dir_ + "\\img.png").convert('RGB'))
     if new_ori.shape[0] > new_ori.shape[1]:
-        new_ori = np.transpose(new_ori,(1,0,2))
-    new_blank = np.zeros((new_ori.shape[0],new_ori.shape[1]))
-    new_blank[nrow_min:nrow_max, ncol_min:ncol_max] = blank
+        new_ori = np.transpose(new_ori, (1, 0, 2))
+    new_blank = np.zeros((new_ori.shape[0], new_ori.shape[1]))
+    new_blank[nrow_min: nrow_max, ncol_min: ncol_max] = blank
     new_result = cv2.bitwise_and(new_ori, new_ori, new_blank)
     new_result[new_blank == 0] = 255  # white background
     new_result = new_result.astype('uint8')
     new_result = cv2.cvtColor(new_result, cv2.COLOR_RGB2BGR)
     os.chdir("save_image_directory")
-    cv2.imwrite("{}_filename.png".format(ind),new_result)
+    cv2.imwrite("{}_filename.png".format(ind), new_result)
     print("ok!")
 
     

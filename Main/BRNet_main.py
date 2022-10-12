@@ -12,19 +12,22 @@ Tips:
 '''
 
 import torch
+import torch.nn as nn
 import numpy as np
 from torch import optim
 from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 
-from unet import UNet, UNet1, UNet_4l
-from Dataset import Mydataset
+from Architecture.BRNet_Architecture import UNet, UNet1, UNet_4l
+from Dataset.Dataset import Mydataset
 import matplotlib.pyplot as plt
 
-from Metrics import SegmentationMetric
+from Main.Metrics import SegmentationMetric
 
-class BRNet(object):
+
+class BRNet(nn.Module):
     def __init__(self, model, device):
+        super().__init__()
         self.device = device
         self.model = model
         self.metric = SegmentationMetric(2)
@@ -81,7 +84,8 @@ class BRNet(object):
         train_size = int(len(dataset) * train_val_ratio)
         val_size = len(dataset) - train_size
         train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-        tarin_dataload = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        train_dataload = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        validation_dataload = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
         for epoch in range(epochs):
             # initialize all parameters
             epoch_train_loss = 0
@@ -89,14 +93,8 @@ class BRNet(object):
             epoch_val_loss = 0
             epoch_val_miou = 0
             step = 0
-            tarin_dataload = DataLoader(train_dataset,
-                                        batch_size=batch_size,
-                                        shuffle=True)
-            if train_size % 4 == 0:
-                total_n = train_size//4
-            else:
-                total_n = train_size//4 + 1
-            for x, y in tarin_dataload:
+            self.model.train()
+            for x, y in train_dataload:
                 self.model.train()
                 inputs = x.to(self.device)
                 outputs = self.model(inputs)
@@ -119,41 +117,37 @@ class BRNet(object):
                 self.metric.addBatch(y.squeeze(1).data.numpy().astype(np.int64), a)
                 train_m_miou = self.metric.meanIntersectionOverUnion()[0]
                 epoch_train_miou += train_m_miou
-            current_train_miou = epoch_train_miou/total_n
+            current_train_miou = epoch_train_miou / len(train_dataload)
             epoch_train_miou_list.append(current_train_miou)
             print('epoch %d training miou:%0.4f' % (epoch, current_train_miou))
-            epoch_train_loss_list.append(epoch_train_loss)
-    
-        validation_dataload = DataLoader(val_dataset,
-                                         batch_size=batch_size,
-                                         shuffle=True)
-        if val_size % 4 == 0:
-            total_n = val_size//4
-        else:
-            total_n = val_size//4 + 1
-        with torch.no_grad():
-            for x1, y1 in validation_dataload:
-                self.model.eval()
-                inputs = x1.to(self.device)
-                outputs = self.model(inputs)
-                labels = y1.to(self.device)
-                labels = labels.long().squeeze(1)
-                loss = criterion(outputs, labels)
-        
-                epoch_val_loss += loss.item()
-                
-                py = outputs.cpu().numpy()        
-                a = np.argmax(py, axis=1)
-                self.metric.addBatch(y1.squeeze(1).data.numpy().astype(np.int64), a)
-                val_m_miou = self.metric.meanIntersectionOverUnion()[0]
-                epoch_val_miou += val_m_miou
-            current_val_miou = epoch_val_miou/total_n
-            epoch_val_miou_list.append(current_val_miou)
-            print('epoch %d validation miou:%0.4f' % (epoch, current_val_miou))
-            
-            epoch_val_loss_list.append(epoch_val_loss)
-    
-            print('epoch %d validation loss:%0.5f' % (epoch, loss))
+
+            current_train_loss = epoch_train_loss / len(train_dataload)
+            epoch_train_loss_list.append(current_train_loss)
+            print('epoch %d training loss:%0.5f' % (epoch, current_train_loss))
+
+            self.model.eval()
+            with torch.no_grad():
+                for x1, y1 in validation_dataload:
+                    inputs = x1.to(self.device)
+                    outputs = self.model(inputs)
+                    labels = y1.to(self.device)
+                    labels = labels.long().squeeze(1)
+                    loss = criterion(outputs, labels)
+
+                    epoch_val_loss += loss.item()
+
+                    py = outputs.cpu().numpy()
+                    a = np.argmax(py, axis=1)
+                    self.metric.addBatch(y1.squeeze(1).data.numpy().astype(np.int64), a)
+                    val_m_miou = self.metric.meanIntersectionOverUnion()[0]
+                    epoch_val_miou += val_m_miou
+                current_val_miou = epoch_val_miou / len(validation_dataload)
+                epoch_val_miou_list.append(current_val_miou)
+                print('epoch %d validation miou:%0.4f' % (epoch, current_val_miou))
+
+                current_val_loss = epoch_val_loss / len(validation_dataload)
+                epoch_val_loss_list.append(current_val_loss)
+                print('epoch %d validation loss:%0.5f' % (epoch, current_val_loss))
         return epoch_train_loss_list, epoch_train_miou_list, epoch_val_loss_list, epoch_val_miou_list
     
     def test_network(self):
@@ -162,57 +156,42 @@ class BRNet(object):
         
         Returns
         -------
-        test_mpa : float
+        m_precision : float
             the mean pixel accuracy of BRNet performing on test set.
-        test_miou : float
+        miou : float
             the mean intersection over union of BRNet performing on test set.
-        test_mrecall : float
+        m_recall : float
             the mean recall of BRNet performing on test set.
-        test_f1score : float
-            the f1-score of BRNet performing on test set.
+        Micro_F1_score : float
+            the Micro f1-score of BRNet performing on test set.
 
         '''
-        test_mpa = 0
-        test_miou = 0
-        test_mrecall = 0
-        test_f1score = 0
+
         test_dataset = Mydataset("patches_path_9")
         test_size = len(test_dataset)
-        test_dataload = DataLoader(test_dataset,
-                                    batch_size=1,
-                                    shuffle=True)
+        test_dataload = DataLoader(test_dataset, batch_size=1, shuffle=True)
         with torch.no_grad():
             for x_, y_ in test_dataload:
                 self.model.eval()
                 inputs = x_.to(self.device)
                 outputs = self.model(inputs)  # 前向传播
                 py = outputs.cpu().numpy()
-                py = py.reshape(2,512,400)        
+                py = py.reshape(2, 512, 400)
                 a = np.argmax(py, axis=0)
         
-                self.metric.addBatch(y_.data.numpy().reshape(512,400).astype(np.int64), a)
-                m_precision = self.metric.meanPixelAccuracy()
-                m_recall = self.metric.meanRecall()
-                F1_score = self.metric.F1_score()
-                miou = self.metric.meanIntersectionOverUnion()[0]
-
-                test_mpa += m_precision
-                test_miou += miou
-                test_mrecall += m_recall
-                test_f1score += F1_score
-                
-            test_mpa = test_mpa/test_size
-            test_miou = test_miou/test_size
-            test_mrecall = test_mrecall/test_size
-            test_f1score = test_f1score/test_size
-
-        return test_mpa, test_miou, test_mrecall, test_f1score
+                self.metric.addBatch(y_.data.numpy().reshape(512, 400).astype(np.int64), a)
+            m_precision = self.metric.meanPixelAccuracy()
+            m_recall = self.metric.meanRecall()
+            Micro_F1_score = self.metric.F1_score()
+            miou = self.metric.meanIntersectionOverUnion()[0]
+        return m_precision, miou, m_recall, Micro_F1_score
     
     def save_network(self, model_name):
         torch.save(self.model.state_dict(), '{}.pkl'.format(model_name))
-    
+
+
 if __name__ == '__main__':
-    # instantiation of the class BRNet, the allocated model is typical U-Net with 10 layers
+    # instantiation of the class BRNet, the allocated model is typical BRNet with 10 layers
     print("Preparation for BRNet training...")
     print("Model construction and BRNet trainer loading...")
     device = torch.device("cuda:0")
@@ -243,15 +222,15 @@ if __name__ == '__main__':
     import os
     os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-    fig = plt.figure(figsize=(8,6))
+    fig = plt.figure(figsize=(8, 6))
     ax = fig.add_subplot(111)
-    ax.set_ylim(0, epoch_train_loss_list.max()*1.1)
+    ax.set_ylim(0, epoch_train_loss_list.max() * 1.1)
     
-    lns1 = ax.plot(epoch_train_loss_list, label = "train Loss")
-    lns2 = ax.plot(epoch_val_loss_list, label = "validation Loss")
+    lns1 = ax.plot(epoch_train_loss_list, label="train Loss")
+    lns2 = ax.plot(epoch_val_loss_list, label="validation Loss")
     ax2 = ax.twinx()
-    lns3 = ax2.plot(epoch_train_miou_list, c='green', label = "train MIoU")
-    lns4 = ax2.plot(epoch_val_miou_list, c='r', label = "validation MIoU")
+    lns3 = ax2.plot(epoch_train_miou_list, c='green', label="train MIoU")
+    lns4 = ax2.plot(epoch_val_miou_list, c='r', label="validation MIoU")
     
     lns = lns1+lns2+lns3+lns4
     labs = [l.get_label() for l in lns]
@@ -260,7 +239,7 @@ if __name__ == '__main__':
     ax.set_xlabel("Epoch (Times)")
     ax.set_ylabel("Loss")
     ax2.set_ylabel("MIoU (%)")
-    ax2.set_ylim(epoch_train_miou_list.min()-0.01, 1.00)
+    ax2.set_ylim(epoch_train_miou_list.min() - 0.01, 1.00)
     
     plt.savefig("curves_{}.png".format("model"))
     plt.close()
@@ -274,7 +253,7 @@ if __name__ == '__main__':
     # BRNet testing
     print("BRNet testing begin...")
     test_mpa, test_miou, test_mrecall, test_f1score = BRNet_Trainer.test_network()
-    print('validation mpa:%0.4f, miou:%0.4f, mrecall:%0.4f, f1-score:%0.4f' % (test_mpa, test_miou, test_mrecall, test_f1score))
+    print('validation mpa:%0.4f, miou:%0.4f, mrecall:%0.4f, Micro f1-score:%0.4f' % (test_mpa, test_miou, test_mrecall, test_f1score))
     
     # Save model
     print("Saving BRNet model...")

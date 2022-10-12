@@ -33,10 +33,11 @@ import cv2
 import numpy as np
 import os
 
-from Metrics import SegmentationMetric
+from Main.Metrics import SegmentationMetric
 import PIL.Image as Image
 
-filepath = "filepath_of_images"
+
+filepath = "file_path_of_images"
 dirs = os.listdir(filepath)
 
 means = []
@@ -51,11 +52,8 @@ kernel_size = (6, 4)
 
 for ind, dir_ in enumerate(dirs):
     label = np.array(Image.open(filepath + "\\" + dir_ + "\\label.png").convert('P'))
-    label[label==1]=0
-    label[label==2]=1
     src = cv2.imread(filepath + "\\" + dir_ + "\\img.png")
     hsv_ori = cv2.cvtColor(src, cv2.COLOR_BGR2HSV)
-    # blank = np.zeros_like(ori, ori.dtype)
     b, g, r = cv2.split(hsv_ori)
     r[r < init_threhold] = 255
     r = cv2.GaussianBlur(r, (5, 5), 0)
@@ -92,32 +90,28 @@ for ind, dir_ in enumerate(dirs):
 
     # -- Metrics for evaluation ------------------------------------------------------------
     result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
-    result[result == 255]=0
-    result[result != 0]=1
+    result[result == 255] = 0
+    result[result != 0] = 1
     
     metric = SegmentationMetric(2)
     metric.addBatch(result.astype(np.int64), label)
     
     c_precision = metric.classPixelAccuracy()
     c_recall = metric.classRecall()
-    c_F1_score = metric.class_F1_score()
+    F1_score = metric.class_F1_score()
+    c_iou = metric.meanIntersectionOverUnion()[1]
     m_precision = metric.meanPixelAccuracy()
     m_recall = metric.meanRecall()
-    F1_score = metric.F1_score()
+    Micro_F1 = metric.F1_score()
     miou = metric.meanIntersectionOverUnion()[0]
-    c_iou = metric.meanIntersectionOverUnion()[1]
     
     print('current img index is:', ind)            
     print('precision is : %f' % (m_precision))
     print('recall is : %f' % (m_recall))
-    print('F1_score is : %f' % (F1_score))
+    print('F1_score is : %f' % (Micro_F1))
     print('miou is : %f' % (miou))
     means.append(m_precision)
     mious.append(miou)
     mrecall.append(m_recall)
     mf1.append(F1_score)
-
-# print(1-(((1-np.mean(means))*5320*7968)/(512*400*3*15)))
-# print(1-(((1-np.mean(miou))*5320*7968)/(512*400*3*15)))
-# print(1-(((1-np.mean(m_recall))*5320*7968)/(512*400*3*15)))
-# print(1-(((1-np.mean(F1_score))*5320*7968)/(512*400*3*15)))
+    metric.reset()
