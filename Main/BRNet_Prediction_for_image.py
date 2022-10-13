@@ -97,14 +97,14 @@ def byj_position_detection(src):
 
 print("Model Performance Testing...")
 print("Model loading...")
-device = torch.device("cuda:0")
+device = torch.device("cuda:0")  # if using cpu, change 'cuda:0' to 'cpu'
 model = UNet(3, 2).to(device)
 model.load_state_dict(torch.load("model.pkl", map_location=device))
 model.eval()
 print("Model loading success!")
 print("Prediction start...")
 
-filepath = "filepath_of_images"
+filepath = "file_path_of_images"
 dirs = os.listdir(filepath)
 
 import time
@@ -142,10 +142,10 @@ for ind, dir_ in enumerate(dirs):
     supplyment_row = row - row_length
     supplyment_col = col - col_length
     
-    nrow_min = row_min - (supplyment_row)//2
-    nrow_max = row_max + supplyment_row - (supplyment_row)//2
-    ncol_min = col_min - (supplyment_col)//2
-    ncol_max = col_max + supplyment_col - (supplyment_col)//2
+    nrow_min = row_min - supplyment_row // 2
+    nrow_max = row_max + supplyment_row - supplyment_row // 2
+    ncol_min = col_min - supplyment_col // 2
+    ncol_max = col_max + supplyment_col - supplyment_col // 2
     
     if col_factor == max_col_factor:
         ncol_min = 0
@@ -160,23 +160,40 @@ for ind, dir_ in enumerate(dirs):
     data_x = data_x.astype(np.float32)
     
     data_xs = data_x[:, nrow_min: nrow_max, ncol_min: ncol_max]
-    blank = np.zeros((data_xs.shape[1],data_xs.shape[2]))
+    blank = np.zeros((data_xs.shape[1], data_xs.shape[2]))
     
     bar = 0
     total = row_factor * col_factor
+    tta = False  # Test-Time Augmentation, using it gives more accurate results, but it also takes more time
     for i in range(row_factor):
         for ii in range(col_factor):
             bar += 1
             test_x = data_xs[:, (512 * i): (512 * (i + 1)), (400 * ii): (400 * (ii + 1))]
+            model.eval()
             with torch.no_grad():
-                test_x = test_x.reshape((1, 3, 512, 400))
-                test_x = test_x / test_x.max()
-                test_x = torch.from_numpy(test_x)
-                test_x = test_x.to(device)
-                pred_y = model(test_x) 
+                if tta:
+                    test_x1 = test_x.reshape((1, 3, 512, 400))
+                    test_x2 = np.flip(test_x, 1).reshape((1, 3, 512, 400))
+                    test_x3 = np.flip(test_x, 2).reshape((1, 3, 512, 400))
+                    test_x4 = np.flip(test_x, (1, 2)).reshape((1, 3, 512, 400))
+                    test_ = np.concatenate([test_x1, test_x2, test_x3, test_x4], axis=0)
+                else:
+                    test_ = test_x.reshape((1, 3, 512, 400))
+                test_ = test_ / test_.max()
+                test_ = torch.from_numpy(test_)
+                test_ = test_.to(device)
+                pred_y = model(test_)
                 
                 py = pred_y.cpu().numpy()
-                py = py.reshape(2, 512, 400)
+                if tta:
+                    py1 = py[0].reshape(2, 512, 400)
+                    py2 = np.flip(py[1].reshape(2, 512, 400), 1)
+                    py3 = np.flip(py[2].reshape(2, 512, 400), 2)
+                    py4 = np.flip(py[3].reshape(2, 512, 400), (1, 2))
+                    py = py1 + py2 + py3 + py4
+                else:
+                    py = py.reshape(2, 512, 400)
+
                 a = np.argmax(py, axis=0)
                 blank[(512 * i): (512 * (i + 1)), (400 * ii): (400 * (ii + 1))] = a
 
@@ -201,18 +218,14 @@ for ind, dir_ in enumerate(dirs):
             if rmin < 0:
                 rmin = 0
             
-            byj_or_br = []
-            byj_or_br.append(blank[rmin,cmin])
-            byj_or_br.append(blank[rmin,cmax])
-            byj_or_br.append(blank[rmax,cmin])
-            byj_or_br.append(blank[rmax,cmax])
-            if len(np.where(np.array(byj_or_br)==1)[0]) >= 2:
-                blank[rmin:rmax,cmin:cmax] = 1
+            byj_or_br = [blank[rmin, cmin], blank[rmin, cmax], blank[rmax, cmin], blank[rmax, cmax]]
+            if len(np.where(np.array(byj_or_br) == 1)[0]) >= 2:
+                blank[rmin: rmax, cmin: cmax] = 1
             else:
-                blank[rmin:rmax,cmin:cmax] = 0
+                blank[rmin: rmax, cmin: cmax] = 0
     t2 = time.time()
     print("Background removal is done!")
-    print("Total time cost: %.4f s"% (t2 - t1))
+    print("Total time cost: %.4f s" % (t2 - t1))
 
     print("Image saving...")
     new_ori = np.array(Image.open(filepath + "\\" + dir_ + "\\img.png").convert('RGB'))
@@ -227,6 +240,3 @@ for ind, dir_ in enumerate(dirs):
     os.chdir("save_image_directory")
     cv2.imwrite("{}_filename.png".format(ind), new_result)
     print("ok!")
-
-    
-    
