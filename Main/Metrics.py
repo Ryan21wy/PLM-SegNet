@@ -29,30 +29,30 @@ class SegmentationMetric(object):
         # acc = (TP) / TP + FP
         classAcc = np.diag(self.confusionMatrix) / self.confusionMatrix.sum(axis=0)
         classAcc[np.isnan(classAcc)] = 0
-        return np.round(classAcc, 3)
+        return np.round(classAcc, 4)
 
     def classRecall(self):
         # recall = (TP) / TP + FN
         classRecall = np.diag(self.confusionMatrix) / self.confusionMatrix.sum(axis=1)
         classRecall[np.isnan(classRecall)] = 0
-        return np.round(classRecall, 3)
+        return np.round(classRecall, 4)
 
     def meanPixelAccuracy(self):
         classAcc = self.classPixelAccuracy()
         meanAcc = np.nanmean(classAcc) 
-        return np.round(meanAcc, 3)
+        return np.round(meanAcc, 4)
 
     def meanRecall(self):
         classRecall = self.classRecall()
         meanRecall = np.nanmean(classRecall)
-        return np.round(meanRecall, 3)
+        return np.round(meanRecall, 4)
 
     def class_F1_score(self):
         classRecall = self.classRecall()
         classRecall[classRecall == 0] = 0.00001
         classAcc = self.classPixelAccuracy()
         class_F1_score = classRecall * classAcc * 2 / (classRecall + classAcc)
-        return np.round(class_F1_score, 3)
+        return np.round(class_F1_score, 4)
 
     def F1_score(self):
         classRecall = self.classRecall()
@@ -60,7 +60,7 @@ class SegmentationMetric(object):
         classAcc = self.classPixelAccuracy()
         meanAcc = np.nanmean(classAcc)
         F1_score = meanRecall * meanAcc * 2 / (meanRecall + meanAcc)
-        return np.round(F1_score, 3)
+        return np.round(F1_score, 4)
 
     def meanIntersectionOverUnion(self):
         # Intersection = TP Union = TP + FP + FN
@@ -71,7 +71,7 @@ class SegmentationMetric(object):
         IoU = intersection / union 
         IoU[np.isnan(IoU)] = 0
         mIoU = np.nanmean(IoU)  
-        return [np.round(mIoU, 3), np.round(IoU, 3)]
+        return [np.round(mIoU, 4), np.round(IoU, 4)]
 
     def genConfusionMatrix(self, imgPredict, imgLabel):  
         # remove classes from unlabeled pixels in gt image and predict

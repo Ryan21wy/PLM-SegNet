@@ -17,7 +17,7 @@ class DoubleConv(nn.Module):
         return self.conv(x)
 
 
-# BRNet with transposed convolution and 10 blocks
+# PLM-SegNet with transposed convolution and 10 blocks
 class UNet(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(UNet, self).__init__()
@@ -68,7 +68,7 @@ class UNet(nn.Module):
         return c10
 
 
-# BRNet with interpolation for upsampling
+# PLM-SegNet with interpolation for upsampling
 class UNet1(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(UNet1, self).__init__()
@@ -124,7 +124,7 @@ class UNet1(nn.Module):
         return c10
 
 
-# BRNet with 8 blocks
+# PLM-SegNet with 8 blocks
 class UNet_4l(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(UNet_4l, self).__init__()
