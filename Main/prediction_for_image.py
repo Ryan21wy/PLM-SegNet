@@ -127,7 +127,8 @@ def prediction(file_path, model_path, save_path, tta=False, edge_treatment=False
         # open an image
         print("Background removal begins! Now :{}/{}".format(ind, len(dirs)))
         print("Trying to open an image and express it in form of ndarray...")
-        data_x1 = np.array(Image.open(file_path + "\\" + dir_ + "\\img.png").convert('RGB'))
+        data_x1 = cv2.imdecode(np.fromfile(file_path + "\\" + dir_ + "\\img.png", dtype=np.uint8), -1)
+        data_x1 = cv2.cvtColor(data_x1, cv2.COLOR_BGR2RGB)
 
         print("Image open success! Now confirm the coordinate of image...")
         [row_min, row_max, col_min, col_max] = byj_position_detection(data_x1)
@@ -248,14 +249,12 @@ def prediction(file_path, model_path, save_path, tta=False, edge_treatment=False
         print("Total time cost: %.4f s" % (t2 - t1))
 
         print("Image saving...")
-        new_ori = np.array(Image.open(file_path + "\\" + dir_ + "\\img.png").convert('RGB'))
-        if new_ori.shape[0] > new_ori.shape[1]:
-            new_ori = np.transpose(new_ori, (1, 0, 2))
-        new_blank = np.zeros((new_ori.shape[0], new_ori.shape[1]))
+        if data_x1.shape[0] > data_x1.shape[1]:
+            data_x1 = np.transpose(data_x1, (1, 0, 2))
+        new_blank = np.zeros((data_x1.shape[0], data_x1.shape[1]))
         new_blank[nrow_min: nrow_max, ncol_min: ncol_max] = blank
-        new_result = cv2.bitwise_and(new_ori, new_ori, new_blank)
-        new_result[new_blank == 0] = 255  # white background
-        new_result = new_result.astype('uint8')
+        data_x1[new_blank == 0] = 255  # white background
+        new_result = data_x1.astype('uint8')
         new_result = cv2.cvtColor(new_result, cv2.COLOR_RGB2BGR)
         os.chdir(save_path)
         cv2.imwrite("{}_filename.png".format(ind), new_result)
